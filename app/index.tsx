@@ -1,33 +1,14 @@
-import { Text, View } from "react-native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import Home from "@/app/Home";
+import Info from "@/app/info";
 
-export default function Index() {
+const Stack = createNativeStackNavigator();
+
+export default function App() {
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <View style={styles.Camera}>
-        <Text>카메라들어갈 자리</Text>
-      </View>
-
-  <View style={styles.infoView}>
-      <Text>Edit app/index.tsx to edit this screen.</Text>
-  </View>
-    </View>
+    <Stack.Navigator>
+      <Stack.Screen name="Home" component={Home} />
+      <Stack.Screen name="Info" component={Info} />
+    </Stack.Navigator>
   );
-}
-
-const styles={
-  Camera:{
-    flex:1,
-    backgroundColor:"blue",
-  },
-  infoView:{
-    flex:1,
-    
-  }
-
 }

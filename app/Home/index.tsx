@@ -12,6 +12,7 @@ import {
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
+import * as FileSystem from "expo-file-system";
 import { useRef, useState } from "react";
 import { router } from "expo-router";
 
@@ -26,12 +27,10 @@ export default function Home() {
   const [uri, setUri] = useState<string | null>(null);
 
   if (!permission) {
-    // Camera permissions are still loading.
     return <View />;
   }
 
   if (!permission.granted) {
-    // Camera permissions are not granted yet.
     return (
       <View style={styles.container}>
         <Text style={styles.message}>
@@ -42,29 +41,57 @@ export default function Home() {
     );
   }
 
+  // 📤 서버로 이미지 업로드하는 함수
+  const uploadToServer = async (uri: string) => {
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    const formData = new FormData();
+
+    formData.append("image", {
+      uri: fileInfo.uri,
+      name: "photo.jpg",
+      type: "image/jpeg",
+    } as any);
+
+    try {
+      const response = await fetch("http://<YOUR_SERVER_IP>:<PORT>/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      console.log("서버 응답:", data);
+    } catch (error) {
+      console.error("업로드 실패:", error);
+    }
+  };
+
   const setSnap = async () => {
     if (cameraRef.current) {
       const options = { quality: 0.5, base64: true };
       let photo: CameraCapturedPicture | undefined =
         await cameraRef.current.takePictureAsync(options);
-      setPhoto(photo ? photo : null);
+      setPhoto(photo ?? null);
       setScanning(false);
       setUri(photo?.uri ?? null);
+
+      // 📤 서버로 이미지 전송
+      if (photo?.uri) {
+        await uploadToServer(photo.uri);
+      }
+
+      // 📍 페이지 이동
       router.push({
         pathname: "/info",
         params: { photo: photo?.uri },
       });
-
-      // callGoogleVisionApi를 호출하려면 아래 주석을 해제하고 함수를 정의하세요
-      // callGoogleVisionApi(photo.base64);
     }
   };
+
   return (
-    <View
-      style={{
-        flex: 1,
-      }}
-    >
+    <View style={{ flex: 1 }}>
       <View style={styles.container}>
         <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
           <View>
@@ -99,7 +126,6 @@ const styles = StyleSheet.create({
   },
   Camera: {
     flex: 1,
-    // backgroundColor:"blue",
   },
   container: {
     flex: 1,

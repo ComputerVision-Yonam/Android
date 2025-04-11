@@ -1,4 +1,5 @@
 import {
+  ActivityIndicator,
   Button,
   Dimensions,
   StyleSheet,
@@ -18,11 +19,12 @@ import { useRef, useState } from "react";
 import { router } from "expo-router";
 
 export default function Home() {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
   const [facing, setFacing] = useState<CameraType>("back");
   const [permission, requestPermission] = useCameraPermissions();
   const windowWidth = Dimensions.get("window").width;
   const cameraRef = useRef<CameraView | null>(null);
-
+  const [isLoading, setIsLoading] = useState(false); // ✅ 추가
   const [photo, setPhoto] = useState<{ uri: string } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [uri, setUri] = useState<string | null>(null);
@@ -53,7 +55,8 @@ export default function Home() {
     } as any);
 
     try {
-      const response = await fetch("http://192.168.55.130:5000/api/predict", {
+      console.log(`${apiUrl}`);
+      const response = await fetch(`${apiUrl}/api/predict`, {
         method: "POST",
         headers: {
           "Content-Type": "multipart/form-data",
@@ -78,34 +81,37 @@ export default function Home() {
 
   const setSnap = async () => {
     if (cameraRef.current) {
-      const options = { quality: 0.5, base64: true };
-      let photo: CameraCapturedPicture | undefined =
-        await cameraRef.current.takePictureAsync(options);
+      setIsLoading(true); // ✅ 로딩 시작
+      try {
+        const options = { quality: 0.5, base64: true };
+        let photo: CameraCapturedPicture | undefined =
+          await cameraRef.current.takePictureAsync(options);
 
-      setPhoto(photo ?? null);
-      setScanning(false);
+        setPhoto(photo ?? null);
+        setScanning(false);
 
-      if (photo?.uri) {
-        // 🧩 이미지 리사이징
-        const resized = await ImageManipulator.manipulateAsync(
-          photo.uri,
-          [{ resize: { width: 640, height: 640 } }],
-          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
-        );
+        if (photo?.uri) {
+          const resized = await ImageManipulator.manipulateAsync(
+            photo.uri,
+            [{ resize: { width: 640, height: 640 } }],
+            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+          );
 
-        setUri(resized.uri); // 리사이즈된 URI 저장
+          setUri(resized.uri);
+          const predictName = await uploadToServer(resized.uri);
 
-        // 📤 리사이즈된 이미지를 서버에 전송
-        const predictName = await uploadToServer(resized.uri);
-
-        // 📍 페이지 이동
-        router.push({
-          pathname: "/info",
-          params: {
-            photo: resized.uri,
-            predictName: predictName ?? "정보 없음",
-          },
-        });
+          router.push({
+            pathname: "/info",
+            params: {
+              photo: resized.uri,
+              predictName: predictName ?? "정보 없음",
+            },
+          });
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false); // ✅ 로딩 종료
       }
     }
   };
@@ -115,17 +121,23 @@ export default function Home() {
       <View style={styles.container}>
         <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
           <View>
-            <Text
-              style={{
-                ...styles.info,
-                width: windowWidth,
-              }}
-            >
+            <Text style={{ ...styles.info, width: windowWidth }}>
               사진을 찍으시면 건물에 대한 정보가 나옵니다.
             </Text>
           </View>
+
+          {isLoading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#fff" />
+            </View>
+          )}
+
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.button} onPress={setSnap}>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={setSnap}
+              disabled={isLoading}
+            >
               <Text style={styles.text}></Text>
             </TouchableOpacity>
           </View>
@@ -176,5 +188,12 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     fontWeight: "bold",
     color: "white",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
 });

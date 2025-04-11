@@ -12,6 +12,7 @@ import {
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
+import * as ImageManipulator from "expo-image-manipulator"; // 📸 리사이즈용
 import * as FileSystem from "expo-file-system";
 import { useRef, useState } from "react";
 import { router } from "expo-router";
@@ -45,7 +46,6 @@ export default function Home() {
   const uploadToServer = async (uri: string) => {
     const fileInfo = await FileSystem.getInfoAsync(uri);
     const formData = new FormData();
-
     formData.append("image", {
       uri: fileInfo.uri,
       name: "photo.jpg",
@@ -53,7 +53,7 @@ export default function Home() {
     } as any);
 
     try {
-      const response = await fetch("http://<YOUR_SERVER_IP>:<PORT>/upload", {
+      const response = await fetch("http://192.168.55.130:5000/api/predict", {
         method: "POST",
         headers: {
           "Content-Type": "multipart/form-data",
@@ -63,6 +63,14 @@ export default function Home() {
 
       const data = await response.json();
       console.log("서버 응답:", data);
+      if (data.predictions && data.predictions.length > 0) {
+        const buildingClass = data.predictions[0].class;
+        console.log("📍 예측된 건물:", buildingClass);
+        return buildingClass;
+      } else {
+        console.log("건물 예측 결과가 없습니다.");
+      }
+      // TODO: 응답 결과를 상태로 저장하거나 페이지에 넘기기 등 추가 처리 가능
     } catch (error) {
       console.error("업로드 실패:", error);
     }
@@ -73,20 +81,32 @@ export default function Home() {
       const options = { quality: 0.5, base64: true };
       let photo: CameraCapturedPicture | undefined =
         await cameraRef.current.takePictureAsync(options);
+
       setPhoto(photo ?? null);
       setScanning(false);
-      setUri(photo?.uri ?? null);
 
-      // 📤 서버로 이미지 전송
       if (photo?.uri) {
-        await uploadToServer(photo.uri);
-      }
+        // 🧩 이미지 리사이징
+        const resized = await ImageManipulator.manipulateAsync(
+          photo.uri,
+          [{ resize: { width: 640, height: 640 } }],
+          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+        );
 
-      // 📍 페이지 이동
-      router.push({
-        pathname: "/info",
-        params: { photo: photo?.uri },
-      });
+        setUri(resized.uri); // 리사이즈된 URI 저장
+
+        // 📤 리사이즈된 이미지를 서버에 전송
+        const predictName = await uploadToServer(resized.uri);
+
+        // 📍 페이지 이동
+        router.push({
+          pathname: "/info",
+          params: {
+            photo: resized.uri,
+            predictName: predictName ?? "정보 없음",
+          },
+        });
+      }
     }
   };
 

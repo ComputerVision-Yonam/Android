@@ -9,6 +9,7 @@ interface InfoRoute {
   path?: string;
   params: {
     photo?: string;
+    predictName: string;
   };
 }
 
@@ -45,7 +46,7 @@ export default function Info() {
         }}
       >
         <Text style={{ fontSize: 30, alignSelf: "center" }}>
-          연암공과대학교 - 산학협동관
+          연암공과대학교 - {route.params?.predictName}
         </Text>
         <Text style={{ fontSize: 18, marginTop: 10, marginLeft: 20 }}>
           산학협동관은 어쩌구 저쩌구
